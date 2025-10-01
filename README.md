@@ -22,6 +22,10 @@ A production-ready demonstration of GPU-accelerated AI inference using **LangCha
 - **Interactive UI**: Web-based interface with real-time metrics
 - **Production-Grade**: Health checks, graceful shutdown, monitoring endpoints
 
+## 🎨 Example Output
+
+![Image Generator Example](images/image%20generator%20example.jpeg)
+
 ## 📖 Complete Setup Guide
 
 **👉 See [SETUP.md](SETUP.md) for detailed step-by-step installation instructions, including:**
