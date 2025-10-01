@@ -1,0 +1,87 @@
+spring:
+  application:
+    name: gpu-langchain4j-demo
+  
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: 8080
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+# LangChain4j GPU Configuration
+# GPU Strategy:
+#   - Default: CPU mode (safe for laptops and CPU-only environments)
+#   - GPU mode: Set ENABLE_GPU=true environment variable in Azure Container Apps with GPU
+#   - To run on GPU: docker run -e ENABLE_GPU=true ... or export ENABLE_GPU=true
+#   - To run on CPU: docker run (default) or export ENABLE_GPU=false
+langchain4j:
+  models:
+    base-path: ./models
+    
+    embedding:
+      all-minilm-l6-v2:
+        path: ${langchain4j.models.base-path}/all-MiniLM-L6-v2/model.onnx
+        warmup-enabled: true
+        batch-size: 32
+        
+    image-generation:
+      stable-diffusion-v15:
+        path: ${langchain4j.models.base-path}/stable-diffusion/model.onnx
+        warmup-enabled: true
+        height: 512
+        width: 512
+        guidance-scale: 7.5
+        num-inference-steps: 50
+        
+  onnx:
+    gpu:
+      enabled: ${ENABLE_GPU:false}  # Default FALSE (CPU-safe), set ENABLE_GPU=true for GPU
+      device-id: 0
+      memory-limit-mb: 8192
+    runtime:
+      log-severity: 2  # 0=Verbose, 1=Info, 2=Warning, 3=Error
+      execution-providers:
+        - cuda
+        - cpu
+      cuda:
+        device-id: 0
+        gpu-mem-limit: 8589934592  # 8GB in bytes
+        arena-extend-strategy: kNextPowerOfTwo
+        cudnn-conv-algo-search: EXHAUSTIVE
+        do-copy-in-default-stream: true
+
+# Model download configuration
+models:
+  download:
+    enabled: false
+    azure-storage-account: ${AZURE_STORAGE_ACCOUNT:gpudemostorage}
+    azure-container: ${AZURE_CONTAINER:onnx-models}
+    retry-attempts: 3
+    timeout-seconds: 600
+
+# Azure AI Inference
+azure:
+  ai:
+    inference:
+      endpoint: ${AZURE_AI_INFERENCE_ENDPOINT:}
+      api-key: ${AZURE_AI_INFERENCE_API_KEY:}
+
+logging:
+  level:
+    root: INFO
+    com.azure.gpudemo: DEBUG
+    dev.langchain4j: DEBUG
+    ai.onnxruntime: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

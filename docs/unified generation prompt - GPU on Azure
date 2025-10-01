@@ -1,0 +1,752 @@
+# Comprehensive Prompt for GPU-Accelerated Inference Demo with LangChain4j and ONNX
+
+## Project Overview
+Create a demonstration application that showcases GPU vs CPU inference performance using LangChain4j with ONNX Runtime integration for both text embeddings and image generation. The application must be deployable to Azure Container Apps with GPU workload profiles (NC8as-T4 or NC24-A100) and runnable locally. The primary visual demonstration will generate fun cartoon images of Clippy (the Microsoft Office assistant mascot) using LangChain4j's image generation capabilities to make performance differences visually compelling.
+
+## Core Technology Decisions
+
+### Language and Framework
+- **Language**: Java 21 LTS (with virtual threads and modern features)
+- **Framework**: Spring Boot 3.2.x with LangChain4j integration
+- **AI Framework**: LangChain4j 0.34+ with ONNX Runtime support
+- **Build Tool**: Maven 3.9+
+
+### LangChain4j Integration Strategy
+- **Text Embeddings**: Use LangChain4j's `EmbeddingModel` with ONNX backend
+- **Image Generation**: Leverage LangChain4j's `ImageModel` interface with Stable Diffusion ONNX
+- **Model Management**: Use LangChain4j's model loading and caching mechanisms
+- **Performance Monitoring**: Integrate with LangChain4j's observability features
+
+### Models (Finalized Selection)
+- **Image Generation**: Stable Diffusion v1.5 ONNX (4GB) via LangChain4j
+  - Expected CPU time: 30-60 seconds
+  - Expected GPU time: 2-5 seconds  
+  - Expected speedup: 12-15x
+- **Text Embeddings**: All-MiniLM-L6-v2 ONNX (90MB) via LangChain4j
+  - Expected CPU time: ~100ms
+  - Expected GPU time: ~10ms
+  - Expected speedup: 10x
+
+### Runtime and Deployment
+- **Inference Engine**: ONNX Runtime 1.16.3 with CUDA support through LangChain4j
+- **Container Platform**: Docker with NVIDIA GPU support
+- **Cloud Platform**: Azure Container Apps with GPU workload profiles
+- **Deployment**: Azure CLI-based scripts and templates
+
+## LangChain4j Dependencies and Configuration
+
+### Maven Dependencies
+```xml
+<properties>
+    <java.version>21</java.version>
+    <spring-boot.version>3.2.5</spring-boot.version>
+    <langchain4j.version>0.34.0</langchain4j.version>
+    <onnxruntime.version>1.16.3</onnxruntime.version>
+</properties>
+
+<dependencies>
+    <!-- Spring Boot -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    
+    <!-- LangChain4j Core -->
+    <dependency>
+        <groupId>dev.langchain4j</groupId>
+        <artifactId>langchain4j</artifactId>
+        <version>${langchain4j.version}</version>
+    </dependency>
+    
+    <!-- LangChain4j Spring Boot Integration -->
+    <dependency>
+        <groupId>dev.langchain4j</groupId>
+        <artifactId>langchain4j-spring-boot-starter</artifactId>
+        <version>${langchain4j.version}</version>
+    </dependency>
+    
+    <!-- LangChain4j Embeddings Models -->
+    <dependency>
+        <groupId>dev.langchain4j</groupId>
+        <artifactId>langchain4j-embeddings-all-minilm-l6-v2</artifactId>
+        <version>${langchain4j.version}</version>
+    </dependency>
+    
+    <!-- LangChain4j ONNX Runtime Integration -->
+    <dependency>
+        <groupId>dev.langchain4j</groupId>
+        <artifactId>langchain4j-onnx</artifactId>
+        <version>${langchain4j.version}</version>
+    </dependency>
+    
+    <!-- ONNX Runtime for GPU acceleration -->
+    <dependency>
+        <groupId>com.microsoft.onnxruntime</groupId>
+        <artifactId>onnxruntime</artifactId>
+        <version>${onnxruntime.version}</version>
+    </dependency>
+    <dependency>
+        <groupId>com.microsoft.onnxruntime</groupId>
+        <artifactId>onnxruntime-gpu</artifactId>
+        <version>${onnxruntime.version}</version>
+    </dependency>
+    
+    <!-- LangChain4j Observability -->
+    <dependency>
+        <groupId>dev.langchain4j</groupId>
+        <artifactId>langchain4j-open-ai</artifactId>
+        <version>${langchain4j.version}</version>
+    </dependency>
+    
+    <!-- Azure AI Inference SDK integration -->
+    <dependency>
+        <groupId>com.azure</groupId>
+        <artifactId>azure-ai-inference</artifactId>
+        <version>1.0.0-beta.1</version>
+    </dependency>
+    
+    <!-- Image processing -->
+    <dependency>
+        <groupId>net.coobird</groupId>
+        <artifactId>thumbnailator</artifactId>
+        <version>0.4.20</version>
+    </dependency>
+</dependencies>
+```
+
+## LangChain4j-Based Architecture
+
+### Core Service Classes Using LangChain4j
+
+```java
+@Service
+@Component
+public class LangChain4jGpuService {
+    
+    // LangChain4j Embedding Model with ONNX backend
+    @Autowired
+    private EmbeddingModel embeddingModel;
+    
+    // Custom Image Generation Model using LangChain4j patterns
+    @Autowired
+    private ImageModel imageModel;
+    
+    // LangChain4j Performance Metrics
+    @Autowired
+    private ModelMetrics modelMetrics;
+    
+    /**
+     * Generate embeddings using LangChain4j with GPU/CPU comparison
+     */
+    public EmbeddingResponse generateEmbeddingComparison(String text) {
+        // CPU execution
+        var cpuStartTime = System.currentTimeMillis();
+        var cpuEmbedding = embeddingModel.embed(text).content();
+        var cpuTime = System.currentTimeMillis() - cpuStartTime;
+        
+        // GPU execution (if available)
+        var gpuStartTime = System.currentTimeMillis();
+        var gpuEmbedding = embeddingModel.embed(text).content(); // GPU-accelerated
+        var gpuTime = System.currentTimeMillis() - gpuStartTime;
+        
+        return EmbeddingResponse.builder()
+            .embedding(gpuEmbedding.vector())
+            .dimensions(gpuEmbedding.dimension())
+            .cpuTimeMs(cpuTime)
+            .gpuTimeMs(gpuTime)
+            .speedup((double) cpuTime / gpuTime)
+            .build();
+    }
+    
+    /**
+     * Generate Clippy images using LangChain4j Image Model
+     */
+    public ImageGenerationResponse generateClippyComparison(String prompt) {
+        String enhancedPrompt = enhanceClippyPrompt(prompt);
+        
+        // Generate with CPU and GPU for comparison
+        var cpuResult = generateImageWithDevice(enhancedPrompt, false);
+        var gpuResult = generateImageWithDevice(enhancedPrompt, true);
+        
+        return ImageGenerationResponse.builder()
+            .originalPrompt(prompt)
+            .enhancedPrompt(enhancedPrompt)
+            .cpuImage(cpuResult.getImageBase64())
+            .gpuImage(gpuResult.getImageBase64())
+            .cpuTimeMs(cpuResult.getGenerationTime())
+            .gpuTimeMs(gpuResult.getGenerationTime())
+            .speedup((double) cpuResult.getGenerationTime() / gpuResult.getGenerationTime())
+            .build();
+    }
+    
+    private String enhanceClippyPrompt(String userPrompt) {
+        return String.format(
+            "cartoon style illustration of clippy the microsoft office assistant paperclip, %s, " +
+            "digital art, clean background, high quality, detailed, friendly expression",
+            userPrompt
+        );
+    }
+}
+```
+
+### LangChain4j Configuration Class
+
+```java
+@Configuration
+@EnableConfigurationProperties(LangChain4jProperties.class)
+public class LangChain4jGpuConfiguration {
+    
+    @Value("${gpu.enabled:true}")
+    private boolean gpuEnabled;
+    
+    @Value("${models.base-path:/app/models}")
+    private String modelsBasePath;
+    
+    /**
+     * Configure LangChain4j Embedding Model with ONNX Runtime
+     */
+    @Bean
+    @Primary
+    public EmbeddingModel embeddingModel() {
+        return AllMiniLmL6V2EmbeddingModel.builder()
+            .modelPath(Paths.get(modelsBasePath, "all-MiniLM-L6-v2", "model.onnx"))
+            .executionProvider(gpuEnabled ? "cuda" : "cpu")
+            .deviceId(0)
+            .build();
+    }
+    
+    /**
+     * Custom Image Model using LangChain4j patterns with Stable Diffusion
+     */
+    @Bean
+    public ImageModel stableDiffusionImageModel() {
+        return StableDiffusionImageModel.builder()
+            .modelPath(Paths.get(modelsBasePath, "stable-diffusion-v1-5"))
+            .executionProvider(gpuEnabled ? "cuda" : "cpu")
+            .deviceId(0)
+            .maxImageSize(512)
+            .steps(20)
+            .build();
+    }
+    
+    /**
+     * LangChain4j Observability Configuration
+     */
+    @Bean
+    public ModelMetrics modelMetrics() {
+        return ModelMetrics.builder()
+            .enableGpuMetrics(gpuEnabled)
+            .enablePerformanceLogging(true)
+            .build();
+    }
+}
+```
+
+## Model Acquisition Using Azure CLI
+
+### Azure CLI Model Download Script
+Create `scripts/azure-download-models.sh`:
+
+```bash
+#!/bin/bash
+
+# Azure CLI-based Model Download and Storage Setup
+# Uses Azure Storage and Azure CLI for model management
+
+set -e
+
+# Configuration
+RESOURCE_GROUP="gpu-inference-demo-rg"
+STORAGE_ACCOUNT="gpudemomodels$(date +%s | cut -c7-10)"
+CONTAINER_NAME="onnx-models"
+LOCATION="eastus"
+
+echo "======================================================"
+echo "Azure CLI Model Management Setup"
+echo "======================================================"
+
+# Ensure Azure CLI is logged in
+az account show &> /dev/null || { echo "Please login with 'az login'"; exit 1; }
+
+# Create resource group
+echo "Creating resource group..."
+az group create --name $RESOURCE_GROUP --location $LOCATION
+
+# Create storage account
+echo "Creating storage account..."
+az storage account create \
+    --name $STORAGE_ACCOUNT \
+    --resource-group $RESOURCE_GROUP \
+    --location $LOCATION \
+    --sku Standard_LRS \
+    --kind StorageV2 \
+    --access-tier Hot
+
+# Get storage account key
+STORAGE_KEY=$(az storage account keys list \
+    --account-name $STORAGE_ACCOUNT \
+    --resource-group $RESOURCE_GROUP \
+    --query "[0].value" -o tsv)
+
+# Create blob container for models
+echo "Creating blob container..."
+az storage container create \
+    --name $CONTAINER_NAME \
+    --account-name $STORAGE_ACCOUNT \
+    --account-key $STORAGE_KEY \
+    --public-access blob
+
+# Download models locally first
+echo "Downloading models locally..."
+mkdir -p models/stable-diffusion-v1-5
+mkdir -p models/all-MiniLM-L6-v2
+
+# Download Stable Diffusion ONNX (using Azure CLI and curl)
+echo "Downloading Stable Diffusion v1.5 ONNX..."
+curl -L -o models/stable-diffusion-v1-5/model.onnx \
+    "https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/v1-5-pruned-emaonly.onnx"
+
+curl -L -o models/stable-diffusion-v1-5/vae_decoder.onnx \
+    "https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/vae_decoder/model.onnx"
+
+curl -L -o models/stable-diffusion-v1-5/text_encoder.onnx \
+    "https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/text_encoder/model.onnx"
+
+# Download All-MiniLM-L6-v2 ONNX
+echo "Downloading All-MiniLM-L6-v2 ONNX..."
+curl -L -o models/all-MiniLM-L6-v2/model.onnx \
+    "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model.onnx"
+
+curl -L -o models/all-MiniLM-L6-v2/tokenizer.json \
+    "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer.json"
+
+# Upload models to Azure Storage using Azure CLI
+echo "Uploading models to Azure Storage..."
+az storage blob upload-batch \
+    --destination $CONTAINER_NAME \
+    --destination-path stable-diffusion-v1-5 \
+    --source models/stable-diffusion-v1-5 \
+    --account-name $STORAGE_ACCOUNT \
+    --account-key $STORAGE_KEY
+
+az storage blob upload-batch \
+    --destination $CONTAINER_NAME \
+    --destination-path all-MiniLM-L6-v2 \
+    --source models/all-MiniLM-L6-v2 \
+    --account-name $STORAGE_ACCOUNT \
+    --account-key $STORAGE_KEY
+
+# Generate SAS URL for container access
+EXPIRY_DATE=$(date -u -d "1 year" +%Y-%m-%dT%H:%MZ)
+SAS_TOKEN=$(az storage container generate-sas \
+    --name $CONTAINER_NAME \
+    --account-name $STORAGE_ACCOUNT \
+    --account-key $STORAGE_KEY \
+    --permissions r \
+    --expiry $EXPIRY_DATE \
+    -o tsv)
+
+MODEL_BASE_URL="https://${STORAGE_ACCOUNT}.blob.core.windows.net/${CONTAINER_NAME}"
+
+echo ""
+echo "======================================================"
+echo "Models uploaded successfully!"
+echo "Storage Account: $STORAGE_ACCOUNT"
+echo "Model Base URL: $MODEL_BASE_URL"
+echo "SAS Token: $SAS_TOKEN"
+echo "======================================================"
+echo ""
+echo "Set these environment variables:"
+echo "export MODEL_STORAGE_URL=\"$MODEL_BASE_URL\""
+echo "export MODEL_SAS_TOKEN=\"$SAS_TOKEN\""
+```
+
+## Azure Container Apps Deployment with Azure CLI
+
+### Complete ACA Deployment Script
+Create `deployment/azure/deploy-aca-gpu.sh`:
+
+```bash
+#!/bin/bash
+
+# Complete Azure Container Apps GPU Deployment using Azure CLI
+# Deploys the entire infrastructure and application
+
+set -e
+
+# Configuration
+RESOURCE_GROUP="gpu-inference-demo-rg"
+LOCATION="eastus"
+ENVIRONMENT_NAME="gpu-langchain4j-env"
+APP_NAME="gpu-langchain4j-app"
+REGISTRY_NAME="gpulangchain4jreg$(date +%s | cut -c7-10)"
+IMAGE_NAME="gpu-langchain4j-demo"
+IMAGE_TAG="latest"
+LOG_ANALYTICS_WORKSPACE="gpu-demo-logs"
+
+# GPU Configuration
+GPU_TYPE="NC8as-T4"  # or "NC24-A100"
+
+echo "======================================================"
+echo "Azure Container Apps GPU Deployment with LangChain4j"
+echo "Configuration:"
+echo "  Resource Group: $RESOURCE_GROUP"
+echo "  Location: $LOCATION" 
+echo "  GPU Type: $GPU_TYPE"
+echo "  Registry: $REGISTRY_NAME"
+echo "======================================================"
+
+# Ensure user is logged in
+az account show &> /dev/null || { echo "Please login with 'az login'"; exit 1; }
+
+# Install Container Apps extension
+echo "Installing/updating Container Apps extension..."
+az extension add --name containerapp --upgrade
+
+# Create resource group
+echo "Creating resource group..."
+az group create --name $RESOURCE_GROUP --location $LOCATION
+
+# Create Log Analytics workspace
+echo "Creating Log Analytics workspace..."
+az monitor log-analytics workspace create \
+    --resource-group $RESOURCE_GROUP \
+    --workspace-name $LOG_ANALYTICS_WORKSPACE \
+    --location $LOCATION
+
+# Get Log Analytics workspace details
+LOG_ANALYTICS_WORKSPACE_ID=$(az monitor log-analytics workspace show \
+    --resource-group $RESOURCE_GROUP \
+    --workspace-name $LOG_ANALYTICS_WORKSPACE \
+    --query customerId -o tsv)
+
+LOG_ANALYTICS_KEY=$(az monitor log-analytics workspace get-shared-keys \
+    --resource-group $RESOURCE_GROUP \
+    --workspace-name $LOG_ANALYTICS_WORKSPACE \
+    --query primarySharedKey -o tsv)
+
+# Create Container Registry
+echo "Creating Azure Container Registry..."
+az acr create \
+    --resource-group $RESOURCE_GROUP \
+    --name $REGISTRY_NAME \
+    --sku Standard \
+    --admin-enabled true \
+    --location $LOCATION
+
+# Get ACR credentials
+ACR_LOGIN_SERVER=$(az acr show --name $REGISTRY_NAME --query loginServer -o tsv)
+ACR_USERNAME=$(az acr credential show --name $REGISTRY_NAME --query username -o tsv)
+ACR_PASSWORD=$(az acr credential show --name $REGISTRY_NAME --query "passwords[0].value" -o tsv)
+
+# Build and push Docker image using Azure CLI
+echo "Building image with ACR..."
+az acr build \
+    --registry $REGISTRY_NAME \
+    --image $IMAGE_NAME:$IMAGE_TAG \
+    --file Dockerfile \
+    .
+
+# Create Container Apps environment with GPU support
+echo "Creating Container Apps environment..."
+az containerapp env create \
+    --name $ENVIRONMENT_NAME \
+    --resource-group $RESOURCE_GROUP \
+    --location $LOCATION \
+    --logs-workspace-id $LOG_ANALYTICS_WORKSPACE_ID \
+    --logs-workspace-key $LOG_ANALYTICS_KEY \
+    --enable-workload-profiles
+
+# Add GPU workload profile
+echo "Adding GPU workload profile: $GPU_TYPE..."
+if [ "$GPU_TYPE" == "NC8as-T4" ]; then
+    az containerapp env workload-profile add \
+        --name $ENVIRONMENT_NAME \
+        --resource-group $RESOURCE_GROUP \
+        --workload-profile-name "gpu-t4-profile" \
+        --workload-profile-type "NC8as-T4" \
+        --min-nodes 0 \
+        --max-nodes 2
+    WORKLOAD_PROFILE="gpu-t4-profile"
+    CPU_CORES="4"
+    MEMORY_SIZE="16Gi"
+elif [ "$GPU_TYPE" == "NC24-A100" ]; then
+    az containerapp env workload-profile add \
+        --name $ENVIRONMENT_NAME \
+        --resource-group $RESOURCE_GROUP \
+        --workload-profile-name "gpu-a100-profile" \
+        --workload-profile-type "NC24-A100" \
+        --min-nodes 0 \
+        --max-nodes 1
+    WORKLOAD_PROFILE="gpu-a100-profile"
+    CPU_CORES="6"
+    MEMORY_SIZE="24Gi"
+fi
+
+# Deploy Container App with GPU
+echo "Deploying Container App..."
+az containerapp create \
+    --name $APP_NAME \
+    --resource-group $RESOURCE_GROUP \
+    --environment $ENVIRONMENT_NAME \
+    --image $ACR_LOGIN_SERVER/$IMAGE_NAME:$IMAGE_TAG \
+    --registry-server $ACR_LOGIN_SERVER \
+    --registry-username $ACR_USERNAME \
+    --registry-password $ACR_PASSWORD \
+    --workload-profile-name $WORKLOAD_PROFILE \
+    --cpu $CPU_CORES \
+    --memory $MEMORY_SIZE \
+    --min-replicas 0 \
+    --max-replicas 3 \
+    --ingress external \
+    --target-port 8080 \
+    --env-vars \
+        "SPRING_PROFILES_ACTIVE=production" \
+        "GPU_ENABLED=true" \
+        "LANGCHAIN4J_ONNX_GPU_ENABLED=true" \
+        "ONNX_EXECUTION_PROVIDER=cuda" \
+        "CUDA_DEVICE_ID=0" \
+        "MODEL_BASE_PATH=/app/models" \
+        "JAVA_OPTS=-XX:+UseZGC -XX:MaxRAMPercentage=80.0"
+
+# Configure scaling rules
+echo "Configuring auto-scaling..."
+az containerapp revision copy \
+    --name $APP_NAME \
+    --resource-group $RESOURCE_GROUP \
+    --from-revision latest
+
+# Get application URL
+APP_URL=$(az containerapp show \
+    --name $APP_NAME \
+    --resource-group $RESOURCE_GROUP \
+    --query "properties.configuration.ingress.fqdn" -o tsv)
+
+echo ""
+echo "======================================================"
+echo "Deployment Complete!"
+echo "======================================================"
+echo "Application URL: https://$APP_URL"
+echo "Container Registry: $ACR_LOGIN_SERVER"
+echo "GPU Workload Profile: $WORKLOAD_PROFILE"
+echo "Resource Group: $RESOURCE_GROUP"
+echo ""
+echo "Monitor with:"
+echo "az containerapp logs show -n $APP_NAME -g $RESOURCE_GROUP --follow"
+echo ""
+echo "Scale up/down:"
+echo "az containerapp update -n $APP_NAME -g $RESOURCE_GROUP --min-replicas 1"
+echo "az containerapp update -n $APP_NAME -g $RESOURCE_GROUP --min-replicas 0"
+echo "======================================================"
+```
+
+## LangChain4j Application Configuration
+
+### Application Properties for LangChain4j
+Create `src/main/resources/application.yml`:
+
+```yaml
+# LangChain4j GPU Demo Configuration
+spring:
+  application:
+    name: gpu-langchain4j-demo
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:development}
+
+server:
+  port: 8080
+
+# LangChain4j Configuration
+langchain4j:
+  embedding-model:
+    provider: "onnx"
+    model-path: "${MODEL_BASE_PATH:/app/models}/all-MiniLM-L6-v2/model.onnx"
+    execution-provider: "${ONNX_EXECUTION_PROVIDER:cpu}"
+    device-id: ${CUDA_DEVICE_ID:0}
+  
+  image-model:
+    provider: "stable-diffusion"
+    model-path: "${MODEL_BASE_PATH:/app/models}/stable-diffusion-v1-5"
+    execution-provider: "${ONNX_EXECUTION_PROVIDER:cpu}"
+    device-id: ${CUDA_DEVICE_ID:0}
+    image-size: 512
+    steps: 20
+
+# GPU Configuration
+gpu:
+  enabled: ${GPU_ENABLED:false}
+  device-id: ${CUDA_DEVICE_ID:0}
+  memory-limit: ${GPU_MEMORY_LIMIT:12GB}
+
+# Model Configuration  
+models:
+  base-path: ${MODEL_BASE_PATH:/app/models}
+  download-on-startup: ${DOWNLOAD_MODELS:true}
+  storage-url: ${MODEL_STORAGE_URL:}
+  cache-enabled: true
+  warmup-on-startup: true
+
+# Performance Configuration
+performance:
+  enable-metrics: true
+  enable-gpu-monitoring: ${GPU_ENABLED:false}
+  batch-size: ${INFERENCE_BATCH_SIZE:1}
+  timeout-seconds: ${INFERENCE_TIMEOUT:30}
+
+# Logging
+logging:
+  level:
+    dev.langchain4j: DEBUG
+    com.azure.gpudemo: INFO
+    onnxruntime: WARN
+```
+
+## Main Application Class with LangChain4j
+
+```java
+@SpringBootApplication
+@EnableConfigurationProperties({LangChain4jProperties.class})
+public class GpuLangChain4jDemoApplication {
+    
+    private static final Logger logger = LoggerFactory.getLogger(GpuLangChain4jDemoApplication.class);
+    
+    @Autowired
+    private LangChain4jGpuService langChain4jService;
+    
+    public static void main(String[] args) {
+        // Enable LangChain4j GPU optimizations
+        System.setProperty("langchain4j.onnx.gpu.enabled", "true");
+        System.setProperty("onnxruntime.execution.provider", "cuda");
+        
+        logger.info("Starting GPU LangChain4j Demo Application");
+        SpringApplication.run(GpuLangChain4jDemoApplication.class, args);
+    }
+    
+    @EventListener(ApplicationReadyEvent.class)
+    public void onApplicationReady() {
+        logger.info("Application ready - warming up LangChain4j models...");
+        langChain4jService.warmupModels();
+    }
+}
+```
+
+## REST Controllers Using LangChain4j
+
+```java
+@RestController
+@RequestMapping("/api/langchain4j")
+@CrossOrigin(origins = "*")
+public class LangChain4jGpuController {
+    
+    @Autowired
+    private LangChain4jGpuService langChain4jService;
+    
+    @PostMapping("/clippy/generate")
+    public ResponseEntity<ImageGenerationResponse> generateClippy(
+            @RequestBody ClippyGenerationRequest request) {
+        
+        var response = langChain4jService.generateClippyComparison(request.getPrompt());
+        return ResponseEntity.ok(response);
+    }
+    
+    @PostMapping("/embeddings/generate")
+    public ResponseEntity<EmbeddingResponse> generateEmbedding(
+            @RequestBody EmbeddingRequest request) {
+        
+        var response = langChain4jService.generateEmbeddingComparison(request.getText());
+        return ResponseEntity.ok(response);
+    }
+    
+    @GetMapping("/models/status")
+    public ResponseEntity<ModelStatusResponse> getModelStatus() {
+        return ResponseEntity.ok(langChain4jService.getModelStatus());
+    }
+    
+    @GetMapping("/performance/metrics")
+    public ResponseEntity<PerformanceMetrics> getPerformanceMetrics() {
+        return ResponseEntity.ok(langChain4jService.getPerformanceMetrics());
+    }
+}
+```
+
+## Dockerfile Optimized for LangChain4j
+
+```dockerfile
+# Multi-stage build optimized for LangChain4j with GPU support
+FROM eclipse-temurin:21-jdk-jammy AS builder
+
+WORKDIR /build
+COPY pom.xml .
+COPY src ./src
+
+# Build with LangChain4j dependencies
+RUN ./mvnw clean package -DskipTests -Dmaven.repo.local=/tmp/.m2
+
+# Runtime with NVIDIA CUDA and LangChain4j optimizations
+FROM nvidia/cuda:12.2.0-runtime-ubuntu22.04
+
+# Install Java 21 and required tools
+RUN apt-get update && apt-get install -y \
+    openjdk-21-jre-headless \
+    curl \
+    wget \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install ONNX Runtime GPU libraries for LangChain4j
+RUN pip3 install onnxruntime-gpu==1.16.3
+
+WORKDIR /app
+
+# Copy application
+COPY --from=builder /build/target/*.jar app.jar
+
+# Create model directories
+RUN mkdir -p /app/models/stable-diffusion-v1-5 \
+    && mkdir -p /app/models/all-MiniLM-L6-v2
+
+# Copy startup script with model management
+COPY scripts/langchain4j-startup.sh /app/startup.sh
+RUN chmod +x /app/startup.sh
+
+# Environment for LangChain4j GPU acceleration
+ENV JAVA_OPTS="-XX:+UseZGC -XX:MaxRAMPercentage=80.0 -Dlangchain4j.onnx.gpu.enabled=true"
+ENV LD_LIBRARY_PATH=/usr/local/lib/python3.8/dist-packages/onnxruntime/capi:$LD_LIBRARY_PATH
+
+EXPOSE 8080
+
+ENTRYPOINT ["/app/startup.sh"]
+```
+
+## Web Interface Integration with LangChain4j
+
+The web interface should showcase LangChain4j capabilities:
+
+1. **LangChain4j Model Status Dashboard**
+   - Show loaded LangChain4j models
+   - Display GPU acceleration status
+   - Model warming and caching status
+
+2. **Interactive Clippy Generation**
+   - Pre-defined LangChain4j prompts
+   - Real-time generation using LangChain4j ImageModel
+   - Side-by-side CPU vs GPU comparison
+
+3. **Embedding Playground**
+   - Text similarity using LangChain4j EmbeddingModel
+   - Vector visualization
+   - Performance metrics
+
+4. **LangChain4j Performance Metrics**
+   - Model loading times
+   - Inference performance
+   - GPU utilization through LangChain4j monitoring
+
+## Success Criteria with LangChain4j
+
+1. **LangChain4j Integration**: Full use of LangChain4j APIs for all AI operations
+2. **GPU Acceleration**: 10-15x speedup through LangChain4j ONNX integration  
+3. **Azure CLI Deployment**: Complete infrastructure and app deployment via Azure CLI
+4. **Performance**: Visual demonstration of GPU vs CPU benefits
+5. **Scalability**: Auto-scaling Container Apps based on demand
+6. **Monitoring**: Full observability through LangChain4j metrics and Azure monitoring

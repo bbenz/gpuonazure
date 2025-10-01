@@ -1,0 +1,121 @@
+# Multi-stage Dockerfile for GPU LangChain4j Demo (UBUNTU 24.04 VERSION)
+# Stage 1: Build application with Maven
+# Stage 2: Runtime with Ubuntu 24.04 (GLIBC 2.39) + CUDA 11.8
+# Models are mounted at runtime, not baked in
+
+###############################################################################
+# Stage 1: Build
+###############################################################################
+FROM maven:3.9-eclipse-temurin-21 AS build
+
+WORKDIR /build
+
+# Copy Maven configuration
+COPY pom.xml .
+
+# Download dependencies (cached layer)
+RUN mvn dependency:go-offline -B
+
+# Copy source code
+COPY src ./src
+
+# Build application
+RUN mvn clean package -DskipTests -B
+
+###############################################################################
+# Stage 2: Runtime - Use CUDA 12.6 + CUDA 11.8 compat on Ubuntu 24.04
+###############################################################################
+# SOLUTION: Upgraded to ONNX Runtime 1.18.0 which supports CUDA 12.4/12.6
+# Now we can use Ubuntu 24.04 (GLIBC 2.39) + CUDA 12.6 - perfect compatibility!
+FROM nvidia/cuda:12.6.0-cudnn-runtime-ubuntu24.04
+
+# Set CUDA environment variables
+ENV CUDA_HOME=/usr/local/cuda \
+    PATH=/usr/local/cuda/bin:${PATH} \
+    LD_LIBRARY_PATH=/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
+
+# Verify GLIBC version (Ubuntu 24.04 has 2.39 - compatible with libortextensions.so)
+RUN ldd --version | head -1
+
+# Install Java 21 and download tools
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        openjdk-21-jre-headless \
+        curl \
+        ca-certificates \
+        wget \
+        gnupg2 \
+        xz-utils && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# CRITICAL FIX: Install cuDNN 8 alongside cuDNN 9
+# ONNX Runtime 1.18.0 expects cuDNN 8, but CUDA 12.6 base image ships with cuDNN 9
+# Download cuDNN 8.9.7 for CUDA 12.x from NVIDIA and install to BOTH locations
+RUN wget https://developer.download.nvidia.com/compute/cudnn/redist/cudnn/linux-x86_64/cudnn-linux-x86_64-8.9.7.29_cuda12-archive.tar.xz && \
+    tar -xf cudnn-linux-x86_64-8.9.7.29_cuda12-archive.tar.xz && \
+    # Install to /usr/local/cuda/lib64 (CUDA default location)
+    cp -P cudnn-linux-x86_64-8.9.7.29_cuda12-archive/lib/libcudnn* /usr/local/cuda/lib64/ && \
+    cp -P cudnn-linux-x86_64-8.9.7.29_cuda12-archive/include/cudnn* /usr/local/cuda/include/ && \
+    # ALSO install to /lib/x86_64-linux-gnu (where ONNX Runtime looks for it)
+    cp -P cudnn-linux-x86_64-8.9.7.29_cuda12-archive/lib/libcudnn.so.8* /lib/x86_64-linux-gnu/ && \
+    cp -P cudnn-linux-x86_64-8.9.7.29_cuda12-archive/lib/libcudnn_*.so.8* /lib/x86_64-linux-gnu/ && \
+    rm -rf cudnn-linux-x86_64-8.9.7.29_cuda12-archive* && \
+    ldconfig && \
+    # Verify cuDNN 8 installation
+    ls -la /lib/x86_64-linux-gnu/libcudnn.so.8* && \
+    echo "✓ cuDNN 8 installed successfully"
+
+# Create application directory
+WORKDIR /app
+
+# Create models directory (will be mounted at runtime)
+RUN mkdir -p /app/models/stable-diffusion && \
+    mkdir -p /app/models/all-MiniLM-L6-v2
+
+# Copy built JAR from build stage
+COPY --from=build /build/target/*.jar /app/app.jar
+
+# Copy pre-built libortextensions.so (GLIBC 2.38+ compatible - works on Ubuntu 24.04!)
+COPY libortextensions.so /app/libortextensions.so
+
+# Copy text_tokenizer directory (SD4J looks for this relative to working directory)
+COPY text_tokenizer /app/text_tokenizer
+
+# Environment variables
+ENV JAVA_OPTS="-Xmx8g -XX:+UseZGC -XX:+ZGenerational --enable-preview" \
+    SPRING_PROFILES_ACTIVE="production" \
+    GPU_LANGCHAIN4J_MODEL_DIR="/app/models" \
+    GPU_LANGCHAIN4J_GPU_ENABLED="true" \
+    GPU_LANGCHAIN4J_GPU_DEVICE_ID="0" \
+    CUDA_VISIBLE_DEVICES="0"
+
+# Expose application port
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8080/actuator/health || exit 1
+
+# Start application
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /app/app.jar"]
+
+###############################################################################
+# Build Instructions (CUDA 12.6 + ONNX Runtime 1.18.0):
+# 
+# 1. Build the image:
+#    docker build -f Dockerfile.ubuntu24 -t gpu-langchain4j-demo:onnx18 .
+#
+# 2. Run with volume-mounted models:
+#    docker run --gpus all -p 8080:8080 \
+#      -v $(pwd)/models:/app/models \
+#      -v $(pwd)/text_tokenizer:/app/text_tokenizer \
+#      -e ENABLE_GPU=true \
+#      gpu-langchain4j-demo:onnx18
+#
+# Benefits:
+# - ONNX Runtime 1.18.0 natively supports CUDA 12.6 (no symlink hacks!)
+# - Ubuntu 24.04 has GLIBC 2.39 (libortextensions.so compatible)
+# - Clean architecture: software matches hardware versions
+# - No compatibility layer or workarounds needed
+###############################################################################

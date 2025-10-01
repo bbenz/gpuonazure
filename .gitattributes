@@ -1,0 +1,27 @@
+# Git attributes for cross-platform development
+# Force LF line endings for shell scripts
+*.sh text eol=lf
+
+# Force LF line endings for Docker and config files
+Dockerfile text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.properties text eol=lf
+
+# Standard text files
+*.java text
+*.xml text
+*.md text
+*.json text
+*.js text
+*.css text
+*.html text
+
+# Binary files
+*.jar binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.onnx binary
+*.so binary

@@ -1,0 +1,216 @@
+# Java/Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+hs_err_pid*
+replay_pid*
+
+# Maven
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# Spring Boot
+spring-boot-*.log
+spring.log
+application-*.log
+
+# IDE - IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# IDE - Eclipse
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+# IDE - VS Code
+.vscode/
+.code-workspace
+
+# IDE - NetBeans
+nbproject/private/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
+# OS Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# Logs
+logs/
+*.log
+log/
+*.log.*
+*.log.gz
+*.log.zip
+gpu-monitor.log
+test-results.log
+docker-build.log
+
+# AI Models (too large for git)
+models/**/*.onnx
+models/**/*.pb
+models/**/weights.pb
+text_tokenizer/*.onnx
+libortextensions.so
+*.onnx
+*.pb
+
+# BUT keep model directory structure (add .gitkeep files manually if needed)
+!models/.gitkeep
+!models/*/.gitkeep
+!models/*/*/.gitkeep
+
+# Model metadata and config (KEEP these)
+!models/**/config.json
+!models/**/tokenizer.json
+!models/**/vocab.txt
+!models/**/vocab.json
+!models/**/merges.txt
+!models/**/special_tokens_map.json
+!models/**/tokenizer_config.json
+
+# Generated Images and Test Files
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+test-*.png
+test-*.jpg
+generated-*.png
+
+# Docker
+*.log
+.dockerignore
+docker-compose.override.yml
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~.nib
+*.bak
+*.cache
+*.diff
+*.err
+*.orig
+*.rej
+*.sav
+*.vi
+*_backup
+*_old
+
+# Azure
+.azure/
+*.env.local
+*.env.*.local
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Secrets and credentials
+secrets/
+*.key
+*.pem
+*.p12
+*.jks
+*.keystore
+credentials.json
+service-account.json
+
+# Build artifacts
+dist/
+build/
+*.so
+*.dll
+*.dylib
+
+# Package files
+*.tar.gz
+*.zip
+*.rar
+*.7z
+
+# Coverage reports
+coverage/
+*.coverage
+.nyc_output
+
+# Dependency directories
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Python (if any Python tools are used)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Local development
+local/
+.local/
+scratch/
+temp/
+tmp/
+
+# Documentation builds
+docs/_build/
+site/
+
+# Custom project-specific ignores
+*.original
+gpu-langchain4j-demo-*.jar.original
