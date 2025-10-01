@@ -58,7 +58,7 @@ A production-ready demonstration of GPU-accelerated AI inference using **LangCha
                        │ REST API
 ┌──────────────────────▼──────────────────────────────────────┐
 │                   Spring Boot Controller                    │
-│                   (ClippyController.java)                   │
+│                   (ImageController.java)                    │
 └──────────────────────┬──────────────────────────────────────┘
                        │
 ┌──────────────────────▼──────────────────────────────────────┐
