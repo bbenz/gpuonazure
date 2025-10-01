@@ -105,15 +105,6 @@ libortextensions.so
 !models/**/special_tokens_map.json
 !models/**/tokenizer_config.json
 
-# Generated Images and Test Files
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.bmp
-test-*.png
-test-*.jpg
-generated-*.png
 
 # Docker
 *.log
